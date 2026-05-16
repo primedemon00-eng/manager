@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "ModerationLog": {
+      "title": "Moderation Log",
+      "description": "A record of a moderation action taken by the bot.",
+      "type": "object",
+      "properties": {
+        "guildId": { "type": "string" },
+        "guildName": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "moderatorId": { "type": "string" },
+        "moderatorName": { "type": "string" },
+        "action": { "type": "string", "enum": ["KICK", "BAN", "MUTE", "UNBAN", "UNMUTE", "AUTOMOD_DELETE", "AUTOMOD_WARN", "AUTOMOD_KICK", "AUTOMOD_BAN", "JOIN", "LEAVE", "MESSAGE_DELETE", "MESSAGE_EDIT", "CHANNEL_CREATE", "CHANNEL_DELETE", "CHANNEL_UPDATE", "ROLE_CREATE", "ROLE_DELETE", "ROLE_UPDATE", "VOICE_JOIN", "VOICE_LEAVE", "VOICE_MOVE", "GUILD_UPDATE"] },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["guildId", "userId", "action", "timestamp", "moderatorId"]
+    },
+    "GuildSettings": {
+      "title": "Guild Settings",
+      "description": "Configuration for the auto-mod bot per guild.",
+      "type": "object",
+      "properties": {
+        "guildId": { "type": "string" },
+        "automodEnabled": { "type": "boolean" },
+        "logChannelId": { "type": "string" },
+        "autoRoleId": { "type": "string" },
+        "verificationChannelId": { "type": "string" },
+        "verifiedRoleId": { "type": "string" },
+        "levelingEnabled": { "type": "boolean" },
+        "levelUpMessage": { "type": "string" },
+        "levelUpChannelId": { "type": "string" },
+        "bannedWords": { "type": "array", "items": { "type": "string" } },
+        "automodAction": { "type": "string", "enum": ["DELETE", "WARN", "KICK", "BAN"] },
+        "youtubeChannelId": { "type": "string" },
+        "youtubeHandle": { "type": "string" },
+        "youtubeLogo": { "type": "string" },
+        "youtubeAnnouncementChannelId": { "type": "string" },
+        "lastVideoId": { "type": "string" },
+        "welcomeEnabled": { "type": "boolean" },
+        "welcomeMessage": { "type": "string" },
+        "welcomeChannelId": { "type": "string" },
+        "inviteTrackingEnabled": { "type": "boolean" },
+        "inviteMessage": { "type": "string" },
+        "inviteChannelId": { "type": "string" },
+        "spamMentionsThreshold": { "type": "number" },
+        "spamMessageThreshold": { "type": "number" },
+        "antiLinkEnabled": { "type": "boolean" },
+        "antiInviteEnabled": { "type": "boolean" },
+        "urlWhitelist": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["guildId"]
+    },
+    "UniqueInvite": {
+      "title": "Unique Invite",
+      "description": "Record of a unique invite relationship to prevent double counting.",
+      "type": "object",
+      "properties": {
+        "invitedUserId": { "type": "string" },
+        "inviterId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invitedUserId", "inviterId", "timestamp"]
+    },
+    "UserLevel": {
+      "title": "User Level",
+      "description": "XP, level, and invite data for a user in a specific guild.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "invites": { "type": "number" },
+        "lastXpUpdate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "xp", "level"]
+    }
+  },
+  "firestore": {
+    "/logs/{logId}": {
+      "schema": "ModerationLog",
+      "description": "History of all moderation actions."
+    },
+    "/guilds/{guildId}": {
+      "schema": "GuildSettings",
+      "description": "Settings for each Discord server."
+    },
+    "/guilds/{guildId}/levels/{userId}": {
+      "schema": "UserLevel",
+      "description": "Leveling data for a specific user in a guild."
+    },
+    "/guilds/{guildId}/invites/{invitedUserId}": {
+      "schema": "UniqueInvite",
+      "description": "Log of unique user invites to avoid duplicate counting."
+    }
+  }
+}

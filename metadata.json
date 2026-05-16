@@ -1,0 +1,8 @@
+{
+  "name": "Discord AutoMod Pro",
+  "description": "A powerful auto-moderation bot for Discord with slash commands and dashboard logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
