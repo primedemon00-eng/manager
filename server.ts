@@ -299,6 +299,51 @@ const commands = [
   new SlashCommandBuilder()
     .setName("stats")
     .setDescription("View bot statistics"),
+
+  new SlashCommandBuilder()
+    .setName("lock")
+    .setDescription("Locks the current channel (denies SendMessages for @everyone)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+  new SlashCommandBuilder()
+    .setName("unlock")
+    .setDescription("Unlocks the current channel")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+  new SlashCommandBuilder()
+    .setName("lockall")
+    .setDescription("Locks all text channels in the server")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName("unlockall")
+    .setDescription("Unlocks all text channels in the server")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName("antiraid")
+    .setDescription("Anti-Raid system settings")
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("setup")
+        .setDescription("Configure Anti-Raid sensitivity")
+        .addIntegerOption(opt => opt.setName("min-age").setDescription("Minimum account age in days (0 to disable)").setRequired(true))
+        .addIntegerOption(opt => opt.setName("join-limit").setDescription("Max joins allowed in the time window").setRequired(true))
+        .addIntegerOption(opt => opt.setName("window").setDescription("Time window in seconds for join limit").setRequired(true))
+        .addStringOption(opt => opt.setName("action").setDescription("Action to take (KICK/BAN/NOTIFY)").setRequired(true)
+          .addChoices({ name: "Kick", value: "KICK" }, { name: "Ban", value: "BAN" }, { name: "Notify Only", value: "NOTIFY" }))
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("start")
+        .setDescription("Enable the Anti-Raid system")
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("stop")
+        .setDescription("Disable the Anti-Raid system")
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ].map(command => command.toJSON());
 
 async function registerCommands() {
@@ -802,6 +847,83 @@ client.on("interactionCreate", async (interaction) => {
         console.error("Auto-mod Toggle Error:", err);
         await interaction.reply({ content: "Failed to update Auto-Mod settings.", ephemeral: true });
       }
+    } else if (commandName === "lock") {
+      const channel = interaction.channel as TextChannel;
+      if (!channel) return interaction.reply({ content: "Channel not found.", ephemeral: true });
+      try {
+        await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+        await interaction.reply({ content: `🔒 <#${channel.id}> has been locked.` });
+        await logModerationAction(guild, user, null, "LOCK", `Channel <#${channel.id}> locked`);
+      } catch (err) {
+        await interaction.reply({ content: "Failed to lock channel. Check permissions.", ephemeral: true });
+      }
+    } else if (commandName === "unlock") {
+      const channel = interaction.channel as TextChannel;
+      if (!channel) return interaction.reply({ content: "Channel not found.", ephemeral: true });
+      try {
+        await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
+        await interaction.reply({ content: `🔓 <#${channel.id}> has been unlocked.` });
+        await logModerationAction(guild, user, null, "UNLOCK", `Channel <#${channel.id}> unlocked`);
+      } catch (err) {
+        await interaction.reply({ content: "Failed to unlock channel. Check permissions.", ephemeral: true });
+      }
+    } else if (commandName === "lockall") {
+      await interaction.deferReply({ ephemeral: true });
+      const channels = guild.channels.cache.filter(c => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement);
+      let count = 0;
+      for (const [id, channel] of channels) {
+        try {
+          await (channel as any).permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+          count++;
+        } catch (e) {
+          console.warn(`Failed to lock channel ${id}`);
+        }
+      }
+      await interaction.editReply({ content: `🔒 Locked ${count} text channels.` });
+      await logModerationAction(guild, user, null, "LOCK_ALL", `Locked ${count} channels`);
+    } else if (commandName === "unlockall") {
+      await interaction.deferReply({ ephemeral: true });
+      const channels = guild.channels.cache.filter(c => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement);
+      let count = 0;
+      for (const [id, channel] of channels) {
+        try {
+          await (channel as any).permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
+          count++;
+        } catch (e) {
+          console.warn(`Failed to unlock channel ${id}`);
+        }
+      }
+      await interaction.editReply({ content: `🔓 Unlocked ${count} text channels.` });
+      await logModerationAction(guild, user, null, "UNLOCK_ALL", `Unlocked ${count} channels`);
+    } else if (commandName === "antiraid") {
+      const subCommand = options.getSubcommand();
+      const settingsRef = doc(db, "guilds", guild.id);
+
+      if (subCommand === "setup") {
+        const minAge = options.getInteger("min-age", true);
+        const joinLimit = options.getInteger("join-limit", true);
+        const window = options.getInteger("window", true);
+        const action = options.getString("action", true);
+
+        await setDoc(settingsRef, {
+          antiRaidMinAge: minAge,
+          antiRaidJoinLimit: joinLimit,
+          antiRaidJoinWindow: window,
+          antiRaidAction: action
+        }, { merge: true });
+
+        await interaction.reply({ 
+          content: `🛡️ **Anti-Raid System** configured!\n• **Min Account Age:** ${minAge} days\n• **Join Rate:** ${joinLimit} joins / ${window}s\n• **Action:** ${action}`,
+          ephemeral: true 
+        });
+      } else if (subCommand === "start" || subCommand === "stop") {
+        const enabled = subCommand === "start";
+        await setDoc(settingsRef, { antiRaidEnabled: enabled }, { merge: true });
+        await interaction.reply({ 
+          content: `🛡️ **Anti-Raid System** has been ${enabled ? "🚀 **ENABLED**" : "🛑 **DISABLED**"}.`,
+          ephemeral: true 
+        });
+      }
     } else if (commandName === "stats") {
       const uptime = process.uptime();
       const hours = Math.floor(uptime / 3600);
@@ -866,6 +988,7 @@ client.on("interactionCreate", async (interaction) => {
 const xpCooldowns = new Map<string, number>();
 const messageFrequencies = new Map<string, number[]>();
 const mentionFrequencies = new Map<string, number[]>();
+const joinRecords = new Map<string, number[]>(); // guildId -> [timestamps]
 
 // Invite Cache: guildId -> [inviteCode -> uses]
 const invitesCache = new Map<string, Map<string, number>>();
@@ -905,6 +1028,54 @@ client.on("guildMemberAdd", async (member) => {
     const settingsSnap = await getDoc(settingsRef);
     if (settingsSnap.exists()) {
       const data = settingsSnap.data();
+
+      // --- Anti-Raid System ---
+      if (data.antiRaidEnabled) {
+        const now = Date.now();
+        const accountAgeDays = (now - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
+        
+        // 1. Account Age Check
+        if (data.antiRaidMinAge && accountAgeDays < data.antiRaidMinAge) {
+          const reason = `Anti-Raid: Account too new (${accountAgeDays.toFixed(1)} days < ${data.antiRaidMinAge} days)`;
+          if (data.antiRaidAction === "BAN") {
+            await member.ban({ reason });
+          } else if (data.antiRaidAction === "KICK") {
+            await member.kick(reason);
+          }
+          await logModerationAction(member.guild, client.user, member, data.antiRaidAction || "KICK", reason);
+          return; // Stop further processing
+        }
+
+        // 2. Join Burst Check
+        const guildJoins = joinRecords.get(member.guild.id) || [];
+        const window = data.antiRaidJoinWindow || 10;
+        const limit = data.antiRaidJoinLimit || 5;
+
+        // Clean up old records
+        const recentJoins = guildJoins.filter(ts => now - ts < window * 1000);
+        recentJoins.push(now);
+        joinRecords.set(member.guild.id, recentJoins);
+
+        if (recentJoins.length >= limit) {
+          const reason = `Anti-Raid: Join burst detected (${recentJoins.length} joins in ${window}s)`;
+          if (data.antiRaidAction === "BAN") {
+            await member.ban({ reason });
+          } else if (data.antiRaidAction === "KICK") {
+            await member.kick(reason);
+          }
+          await logModerationAction(member.guild, client.user, member, data.antiRaidAction || "KICK", reason);
+          
+          // Lockdown server? We can notify staff
+          const logChannelId = data.logChannelId;
+          if (logChannelId) {
+            const channel = member.guild.channels.cache.get(logChannelId) as TextChannel;
+            if (channel) {
+              await channel.send(`⚠️ **RAID ALERT**: Excessive joins detected! System is taking ${data.antiRaidAction || "KICK"} action on new members.`);
+            }
+          }
+          return;
+        }
+      }
       
       // Auto-role
       if (data.autoRoleId) {

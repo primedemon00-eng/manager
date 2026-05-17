@@ -62,7 +62,7 @@ interface ModerationLog {
   userName: string;
   moderatorId: string;
   moderatorName: string;
-  action: "KICK" | "BAN" | "MUTE" | "UNBAN" | "UNMUTE" | "AUTOMOD_DELETE" | "AUTOMOD_WARN" | "AUTOMOD_KICK" | "AUTOMOD_BAN" | "JOIN" | "LEAVE" | "MESSAGE_DELETE" | "MESSAGE_EDIT" | "CHANNEL_CREATE" | "CHANNEL_DELETE" | "CHANNEL_UPDATE" | "ROLE_CREATE" | "ROLE_DELETE" | "ROLE_UPDATE" | "VOICE_JOIN" | "VOICE_LEAVE" | "VOICE_MOVE" | "GUILD_UPDATE";
+  action: "KICK" | "BAN" | "MUTE" | "UNBAN" | "UNMUTE" | "AUTOMOD_DELETE" | "AUTOMOD_WARN" | "AUTOMOD_KICK" | "AUTOMOD_BAN" | "JOIN" | "LEAVE" | "MESSAGE_DELETE" | "MESSAGE_EDIT" | "CHANNEL_CREATE" | "CHANNEL_DELETE" | "CHANNEL_UPDATE" | "ROLE_CREATE" | "ROLE_DELETE" | "ROLE_UPDATE" | "VOICE_JOIN" | "VOICE_LEAVE" | "VOICE_MOVE" | "GUILD_UPDATE" | "LOCK" | "UNLOCK" | "LOCK_ALL" | "UNLOCK_ALL";
   reason: string;
   timestamp: string;
 }
@@ -91,6 +91,10 @@ const ACTION_CONFIG: Record<string, any> = {
   VOICE_LEAVE: { icon: Mic, color: "text-rose-500", bg: "bg-rose-50", label: "V Leave" },
   VOICE_MOVE: { icon: Mic, color: "text-blue-500", bg: "bg-blue-50", label: "V Move" },
   GUILD_UPDATE: { icon: Globe, color: "text-indigo-600", bg: "bg-indigo-50", label: "Server" },
+  LOCK: { icon: Trash2, color: "text-rose-600", bg: "bg-rose-50", label: "Lock" },
+  UNLOCK: { icon: UserCheck, color: "text-emerald-600", bg: "bg-emerald-50", label: "Unlock" },
+  LOCK_ALL: { icon: Trash2, color: "text-rose-700", bg: "bg-rose-100", label: "Lock All" },
+  UNLOCK_ALL: { icon: UserCheck, color: "text-emerald-700", bg: "bg-emerald-100", label: "Unlock All" },
 };
 
 interface GuildSettings {
@@ -121,6 +125,11 @@ interface GuildSettings {
   antiLinkEnabled?: boolean;
   antiInviteEnabled?: boolean;
   urlWhitelist?: string[];
+  antiRaidEnabled?: boolean;
+  antiRaidMinAge?: number;
+  antiRaidJoinLimit?: number;
+  antiRaidJoinWindow?: number;
+  antiRaidAction?: "KICK" | "BAN" | "NOTIFY";
 }
 
 interface UserLevel {
@@ -1115,6 +1124,97 @@ Enjoy your stay and be awesome! 🚀`}
               </div>
             </div>
 
+            {/* Anti-Raid System */}
+            <div className="col-span-full mt-8 p-6 bg-slate-900 rounded-3xl text-white shadow-xl shadow-slate-200 overflow-hidden relative">
+              <div className="absolute right-0 top-0 p-8 opacity-10">
+                <Shield size={120} />
+              </div>
+              <div className="flex items-center gap-3 mb-6 relative z-10">
+                <div className="p-2 bg-indigo-500 rounded-xl text-white">
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black tracking-tight uppercase">Anti-Raid Protection</h4>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-tight uppercase">Detect and block automated attacks & raids</p>
+                </div>
+                {isEditing && (
+                  <button 
+                    onClick={() => setFormData({ ...formData, antiRaidEnabled: !formData.antiRaidEnabled })}
+                    className={cn(
+                      "ml-auto px-4 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg",
+                      formData.antiRaidEnabled ? "bg-indigo-400 text-indigo-950" : "bg-white/10 text-white/50"
+                    )}
+                  >
+                    {formData.antiRaidEnabled ? "System Active" : "System Offline"}
+                  </button>
+                )}
+              </div>
+
+              {formData.antiRaidEnabled && (
+                <div className="grid sm:grid-cols-3 gap-6 relative z-10 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest px-1">Join Rate Limit</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <SettingsField 
+                        icon={<LogIn size={14} />} 
+                        label="Join Limit" 
+                        value={formData.antiRaidJoinLimit?.toString() || "5"} 
+                        isEditing={isEditing}
+                        className="!bg-white/5 !border-white/10 !text-white"
+                        onChange={(val) => setFormData({ ...formData, antiRaidJoinLimit: parseInt(val) || 0 })}
+                      />
+                      <SettingsField 
+                        icon={<Clock size={14} />} 
+                        label="Window (s)" 
+                        value={formData.antiRaidJoinWindow?.toString() || "10"} 
+                        isEditing={isEditing}
+                        className="!bg-white/5 !border-white/10 !text-white"
+                        onChange={(val) => setFormData({ ...formData, antiRaidJoinWindow: parseInt(val) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest px-1">Account Validation</p>
+                    <SettingsField 
+                      icon={<Clock size={16} />} 
+                      label="Min Account Age (Days)" 
+                      value={formData.antiRaidMinAge?.toString() || "0"} 
+                      isEditing={isEditing}
+                      className="!bg-white/5 !border-white/10 !text-white"
+                      onChange={(val) => setFormData({ ...formData, antiRaidMinAge: parseInt(val) || 0 })}
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest px-1">Defensive Action</p>
+                    {isEditing ? (
+                      <div className="flex flex-wrap gap-1.5 p-1 bg-white/5 rounded-2xl border border-white/10">
+                        {["KICK", "BAN", "NOTIFY"].map((action) => (
+                          <button
+                            key={action}
+                            onClick={() => setFormData({ ...formData, antiRaidAction: action as any })}
+                            className={cn(
+                              "flex-1 px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all",
+                              formData.antiRaidAction === action 
+                                ? "bg-indigo-500 text-white shadow-lg" 
+                                : "text-white/40 hover:text-white/60"
+                            )}
+                          >
+                            {action}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-4 py-3 bg-white/5 rounded-2xl border border-dashed border-white/20">
+                        <span className="text-xs font-mono font-bold text-white uppercase">{formData.antiRaidAction || "KICK"}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {formData.antiLinkEnabled && (
               <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
                 <div className="flex items-center justify-between">
@@ -1444,17 +1544,18 @@ function RecentWelcomesMini({ guildId }: { guildId: string }) {
   );
 }
 
-function SettingsField({ icon, label, value, isEditing, onChange, type = "text", guildId }: { 
+function SettingsField({ icon, label, value, isEditing, onChange, type = "text", guildId, className }: { 
   icon: ReactNode, 
   label: string, 
   value?: string, 
   isEditing: boolean, 
   onChange: (val: string) => void,
   type?: "text" | "channel" | "role",
-  guildId?: string
+  guildId?: string,
+  className?: string
 }) {
   return (
-    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-4 group transition-all hover:bg-slate-100/50">
+    <div className={cn("p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-4 group transition-all hover:bg-slate-100/50", className)}>
       <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm">
         {icon}
       </div>

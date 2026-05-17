@@ -48,7 +48,12 @@
         "spamMessageThreshold": { "type": "number" },
         "antiLinkEnabled": { "type": "boolean" },
         "antiInviteEnabled": { "type": "boolean" },
-        "urlWhitelist": { "type": "array", "items": { "type": "string" } }
+        "urlWhitelist": { "type": "array", "items": { "type": "string" } },
+        "antiRaidEnabled": { "type": "boolean" },
+        "antiRaidMinAge": { "type": "number" },
+        "antiRaidJoinLimit": { "type": "number" },
+        "antiRaidJoinWindow": { "type": "number" },
+        "antiRaidAction": { "type": "string", "enum": ["KICK", "BAN", "NOTIFY"] }
       },
       "required": ["guildId"]
     },
