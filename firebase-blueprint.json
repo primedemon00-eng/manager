@@ -53,7 +53,9 @@
         "antiRaidMinAge": { "type": "number" },
         "antiRaidJoinLimit": { "type": "number" },
         "antiRaidJoinWindow": { "type": "number" },
-        "antiRaidAction": { "type": "string", "enum": ["KICK", "BAN", "NOTIFY"] }
+        "antiRaidAction": { "type": "string", "enum": ["KICK", "BAN", "NOTIFY"] },
+        "authorizedUsers": { "type": "array", "items": { "type": "string" } },
+        "authorizedRoles": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["guildId"]
     },

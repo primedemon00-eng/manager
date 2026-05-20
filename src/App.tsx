@@ -131,6 +131,8 @@ interface GuildSettings {
   antiRaidJoinLimit?: number;
   antiRaidJoinWindow?: number;
   antiRaidAction?: "KICK" | "BAN" | "NOTIFY";
+  authorizedUsers?: string[];
+  authorizedRoles?: string[];
 }
 
 interface UserLevel {

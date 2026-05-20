@@ -344,6 +344,30 @@ const commands = [
         .setDescription("Disable the Anti-Raid system")
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName("permission")
+    .setDescription("Configure custom admin permissions for other users/roles to use the bot")
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("add")
+        .setDescription("Authorize a user or role to run bot configuration and moderation commands")
+        .addUserOption(opt => opt.setName("user").setDescription("User to authorize").setRequired(false))
+        .addRoleOption(opt => opt.setName("role").setDescription("Role to authorize").setRequired(false))
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("remove")
+        .setDescription("Revoke authorization from a user or role")
+        .addUserOption(opt => opt.setName("user").setDescription("User to de-authorize").setRequired(false))
+        .addRoleOption(opt => opt.setName("role").setDescription("Role to de-authorize").setRequired(false))
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("list")
+        .setDescription("List all currently authorized users and roles")
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
  ].map(command => command.toJSON());
 
 async function registerCommands() {
@@ -373,8 +397,8 @@ async function logModerationAction(guild: any, moderator: any, target: any, acti
     const payload = {
       guildId: guild.id,
       guildName: guild.name,
-      userId: target?.id || target || "N/A",
-      userName: target?.username || target?.user?.username || target || "N/A",
+      userId: target?.id || target?.user?.id || (typeof target === "string" ? target : null) || moderator.id || "N/A",
+      userName: target?.user?.username || target?.username || (typeof target === "string" ? target : null) || moderator.username || "N/A",
       moderatorId: moderator.id,
       moderatorName: moderator.username,
       action: action,
@@ -400,9 +424,10 @@ async function logModerationAction(guild: any, moderator: any, target: any, acti
       if (data.logChannelId) {
         const channel = await guild.channels.fetch(data.logChannelId).catch(() => null);
         if (channel && channel instanceof TextChannel) {
+          const isCommand = action === "COMMAND";
           const fields = [
-            { name: "Moderator", value: `${moderator.tag || moderator.username} (${moderator.id})`, inline: true },
-            { name: "Reason", value: reason || "No reason provided" }
+            { name: isCommand ? "User" : "Moderator", value: `${moderator.tag || moderator.username} (${moderator.id})`, inline: true },
+            { name: isCommand ? "Command Detail" : "Reason", value: reason || "No reason provided" }
           ];
 
           if (target) {
@@ -411,10 +436,10 @@ async function logModerationAction(guild: any, moderator: any, target: any, acti
 
           await channel.send({
             embeds: [{
-              title: `Moderation Action: ${action}`,
+              title: isCommand ? `Command Execution Log` : `Moderation Action: ${action}`,
               fields: fields,
               timestamp: new Date().toISOString(),
-              color: action === "BAN" ? 0xFF0000 : action === "KICK" ? 0xFFA500 : action === "PURGE" ? 0x3498DB : 0x00FF00
+              color: action === "BAN" ? 0xFF0000 : action === "KICK" ? 0xFFA500 : action === "PURGE" ? 0x3498DB : isCommand ? 0x5865F2 : 0x00FF00
             }]
           }).catch(err => console.error("Discord Channel Log Failure:", err.message));
         }
@@ -431,17 +456,54 @@ client.on("interactionCreate", async (interaction) => {
   const { commandName, options, guild, user } = interaction;
   if (!guild) return;
 
-  // Only the server owner can use bot's configuration and moderation commands
+  // Only the server owner or authorized users/roles can use bot's configuration and moderation commands
   const subcommandName = options.getSubcommand(false);
   const isPublic = ["rank", "stats", "poll"].includes(commandName) ||
                    (commandName === "level" && subcommandName === "leaderboard") ||
                    (commandName === "invite" && subcommandName === "leaderboard");
 
-  if (!isPublic && user.id !== guild.ownerId) {
-    return interaction.reply({
-      content: "❌ Only the server owner can use this command.",
-      ephemeral: true
-    });
+  if (!isPublic) {
+    let isAuthorized = user.id === guild.ownerId;
+
+    if (commandName === "permission") {
+      if (user.id !== guild.ownerId) {
+        return interaction.reply({
+          content: "❌ Only the server owner can configure bot permissions.",
+          ephemeral: true
+        });
+      }
+    } else if (!isAuthorized) {
+      try {
+        const settingsRef = doc(db, "guilds", guild.id);
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data();
+          const authorizedUsers = data.authorizedUsers || [];
+          const authorizedRoles = data.authorizedRoles || [];
+
+          if (authorizedUsers.includes(user.id)) {
+            isAuthorized = true;
+          } else {
+            const member = interaction.member as GuildMember;
+            if (member && member.roles) {
+              const hasRole = member.roles.cache.some(role => authorizedRoles.includes(role.id));
+              if (hasRole) {
+                isAuthorized = true;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to read guild settings for command authorization:", err);
+      }
+    }
+
+    if (!isAuthorized) {
+      return interaction.reply({
+        content: "❌ Only the server owner or authorized users/roles can use this command.",
+        ephemeral: true
+      });
+    }
   }
 
   try {
@@ -953,6 +1015,125 @@ client.on("interactionCreate", async (interaction) => {
           ephemeral: true 
         });
       }
+    } else if (commandName === "permission") {
+      const subCommand = options.getSubcommand();
+      const settingsRef = doc(db, "guilds", guild.id);
+      const settingsSnap = await getDoc(settingsRef);
+      const data = settingsSnap.exists() ? settingsSnap.data() : {};
+      const authorizedUsers: string[] = data.authorizedUsers || [];
+      const authorizedRoles: string[] = data.authorizedRoles || [];
+
+      if (subCommand === "add") {
+        const targetUser = options.getUser("user");
+        const targetRole = options.getRole("role");
+
+        if (!targetUser && !targetRole) {
+          return interaction.reply({
+            content: "❌ You must specify at least a user or a role to authorize.",
+            ephemeral: true
+          });
+        }
+
+        let descriptionParts: string[] = [];
+
+        if (targetUser) {
+          if (!authorizedUsers.includes(targetUser.id)) {
+            authorizedUsers.push(targetUser.id);
+          }
+          descriptionParts.push(`User <@${targetUser.id}>`);
+        }
+
+        if (targetRole) {
+          if (!authorizedRoles.includes(targetRole.id)) {
+            authorizedRoles.push(targetRole.id);
+          }
+          descriptionParts.push(`Role <@&${targetRole.id}>`);
+        }
+
+        await setDoc(settingsRef, {
+          authorizedUsers,
+          authorizedRoles
+        }, { merge: true });
+
+        await interaction.reply({
+          content: `✅ Successfully added custom bot authorization!\n• **Authorized:** ${descriptionParts.join(", ")}`,
+          ephemeral: true
+        });
+        await logModerationAction(guild, user, null, "COMMAND", `Granted bot commands permission to: ${descriptionParts.join(", ")}`);
+
+      } else if (subCommand === "remove") {
+        const targetUser = options.getUser("user");
+        const targetRole = options.getRole("role");
+
+        if (!targetUser && !targetRole) {
+          return interaction.reply({
+            content: "❌ You must specify at least a user or a role to de-authorize.",
+            ephemeral: true
+          });
+        }
+
+        let descriptionParts: string[] = [];
+
+        if (targetUser) {
+          const index = authorizedUsers.indexOf(targetUser.id);
+          if (index !== -1) {
+            authorizedUsers.splice(index, 1);
+            descriptionParts.push(`User <@${targetUser.id}>`);
+          } else {
+            return interaction.reply({
+              content: `❌ User <@${targetUser.id}> is not authorized.`,
+              ephemeral: true
+            });
+          }
+        }
+
+        if (targetRole) {
+          const index = authorizedRoles.indexOf(targetRole.id);
+          if (index !== -1) {
+            authorizedRoles.splice(index, 1);
+            descriptionParts.push(`Role <@&${targetRole.id}>`);
+          } else {
+            return interaction.reply({
+              content: `❌ Role <@&${targetRole.id}> is not authorized.`,
+              ephemeral: true
+            });
+          }
+        }
+
+        await setDoc(settingsRef, {
+          authorizedUsers,
+          authorizedRoles
+        }, { merge: true });
+
+        await interaction.reply({
+          content: `✅ Successfully revoked custom bot authorization!\n• **De-authorized:** ${descriptionParts.join(", ")}`,
+          ephemeral: true
+        });
+        await logModerationAction(guild, user, null, "COMMAND", `Revoked bot commands permission from: ${descriptionParts.join(", ")}`);
+
+      } else if (subCommand === "list") {
+        const userMentions = authorizedUsers.length > 0 
+          ? authorizedUsers.map(id => `<@${id}> (\`${id}\`)`).join("\n") 
+          : "None";
+        const roleMentions = authorizedRoles.length > 0 
+          ? authorizedRoles.map(id => `<@&${id}> (\`${id}\`)`).join("\n") 
+          : "None";
+
+        await interaction.reply({
+          embeds: [{
+            title: "🛡️ Bot Custom Permissions List",
+            description: "Authorized users and roles can use all bot configuration & moderation commands.",
+            fields: [
+              { name: "👑 Server Owner (Always Allowed)", value: `<@${guild.ownerId}> (\`${guild.ownerId}\`)` },
+              { name: "👤 Authorized Users", value: userMentions },
+              { name: "👥 Authorized Roles", value: roleMentions }
+            ],
+            color: 0x5865F2,
+            timestamp: new Date().toISOString()
+          }],
+          ephemeral: true
+        });
+      }
     } else if (commandName === "stats") {
       const uptime = process.uptime();
       const hours = Math.floor(uptime / 3600);
@@ -1060,12 +1241,12 @@ client.on("guildMemberAdd", async (member) => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       
       const fetchedLogs = await member.guild.fetchAuditLogs({
-        limit: 1,
+        limit: 5,
         type: AuditLogEvent.BotAdd,
       });
-      const botLog = fetchedLogs.entries.first();
+      const botLog = fetchedLogs.entries.find(entry => entry.targetId === member.id);
       
-      if (botLog && botLog.targetId === member.id) {
+      if (botLog) {
         if (botLog.executorId === member.guild.ownerId) {
           isAddAllowed = true;
         }
@@ -1075,14 +1256,14 @@ client.on("guildMemberAdd", async (member) => {
     }
 
     if (!isAddAllowed) {
-      await member.kick("Only the server owner is authorized to add bots to this server.").catch(console.error);
+      await member.kick("Anti-Raid: Bot additions are restricted to the server owner only.").catch(console.error);
       const modUser = client.user || { id: "SYSTEM", username: "System" };
       await logModerationAction(
         member.guild,
         modUser,
         member.user,
         "KICK",
-        "Kicked unauthorized bot (Bot additions are restricted to the server owner only)."
+        "Kicked unauthorized bot (Only the server owner is authorized to add bots. Administrators are blocked from adding bots)."
       );
       return;
     }
