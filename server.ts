@@ -16,7 +16,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType
+  ComponentType,
+  AuditLogEvent
 } from "discord.js";
 import { initializeApp } from "firebase/app";
 import { 
@@ -56,7 +57,6 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildPresences,
   ],
 });
 
@@ -431,7 +431,36 @@ client.on("interactionCreate", async (interaction) => {
   const { commandName, options, guild, user } = interaction;
   if (!guild) return;
 
+  // Only the server owner can use bot's configuration and moderation commands
+  const subcommandName = options.getSubcommand(false);
+  const isPublic = ["rank", "stats", "poll"].includes(commandName) ||
+                   (commandName === "level" && subcommandName === "leaderboard") ||
+                   (commandName === "invite" && subcommandName === "leaderboard");
+
+  if (!isPublic && user.id !== guild.ownerId) {
+    return interaction.reply({
+      content: "❌ Only the server owner can use this command.",
+      ephemeral: true
+    });
+  }
+
   try {
+    // Log the command execution
+    let optStrings: string[] = [];
+    try {
+      options.data.forEach((opt: any) => {
+        if (opt.value !== undefined) {
+          optStrings.push(`${opt.name}: ${opt.value}`);
+        } else if (opt.options) {
+          opt.options.forEach((subOpt: any) => {
+            optStrings.push(`${subOpt.name}: ${subOpt.value}`);
+          });
+        }
+      });
+    } catch (e) {}
+    const commandDetail = `/${commandName}${subcommandName ? " " + subcommandName : ""}${optStrings.length ? " (" + optStrings.join(", ") + ")" : ""}`;
+    await logModerationAction(guild, user, null, "COMMAND", `Executed command: ${commandDetail}`);
+
     if (commandName === "kick") {
       const target = options.getMember("target") as GuildMember;
       const reason = options.getString("reason") || "No reason provided";
@@ -1023,6 +1052,42 @@ client.on("inviteDelete", async (invite) => {
 });
 
 client.on("guildMemberAdd", async (member) => {
+  // If the joining member is a bot, enforce that only the server owner can invite bots.
+  if (member.user.bot) {
+    let isAddAllowed = false;
+    try {
+      // Small delay to ensure Discord's audit log is generated and synchronized
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      const fetchedLogs = await member.guild.fetchAuditLogs({
+        limit: 1,
+        type: AuditLogEvent.BotAdd,
+      });
+      const botLog = fetchedLogs.entries.first();
+      
+      if (botLog && botLog.targetId === member.id) {
+        if (botLog.executorId === member.guild.ownerId) {
+          isAddAllowed = true;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to verify audit logs for bot join:", error);
+    }
+
+    if (!isAddAllowed) {
+      await member.kick("Only the server owner is authorized to add bots to this server.").catch(console.error);
+      const modUser = client.user || { id: "SYSTEM", username: "System" };
+      await logModerationAction(
+        member.guild,
+        modUser,
+        member.user,
+        "KICK",
+        "Kicked unauthorized bot (Bot additions are restricted to the server owner only)."
+      );
+      return;
+    }
+  }
+
   try {
     const settingsRef = doc(db, "guilds", member.guild.id);
     const settingsSnap = await getDoc(settingsRef);

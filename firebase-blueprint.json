@@ -11,7 +11,7 @@
         "userName": { "type": "string" },
         "moderatorId": { "type": "string" },
         "moderatorName": { "type": "string" },
-        "action": { "type": "string", "enum": ["KICK", "BAN", "MUTE", "UNBAN", "UNMUTE", "AUTOMOD_DELETE", "AUTOMOD_WARN", "AUTOMOD_KICK", "AUTOMOD_BAN", "JOIN", "LEAVE", "MESSAGE_DELETE", "MESSAGE_EDIT", "CHANNEL_CREATE", "CHANNEL_DELETE", "CHANNEL_UPDATE", "ROLE_CREATE", "ROLE_DELETE", "ROLE_UPDATE", "VOICE_JOIN", "VOICE_LEAVE", "VOICE_MOVE", "GUILD_UPDATE"] },
+        "action": { "type": "string", "enum": ["KICK", "BAN", "MUTE", "UNBAN", "UNMUTE", "AUTOMOD_DELETE", "AUTOMOD_WARN", "AUTOMOD_KICK", "AUTOMOD_BAN", "JOIN", "LEAVE", "MESSAGE_DELETE", "MESSAGE_EDIT", "CHANNEL_CREATE", "CHANNEL_DELETE", "CHANNEL_UPDATE", "ROLE_CREATE", "ROLE_DELETE", "ROLE_UPDATE", "VOICE_JOIN", "VOICE_LEAVE", "VOICE_MOVE", "GUILD_UPDATE", "LOCK", "UNLOCK", "LOCK_ALL", "UNLOCK_ALL", "COMMAND"] },
         "reason": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },

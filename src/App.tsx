@@ -62,7 +62,7 @@ interface ModerationLog {
   userName: string;
   moderatorId: string;
   moderatorName: string;
-  action: "KICK" | "BAN" | "MUTE" | "UNBAN" | "UNMUTE" | "AUTOMOD_DELETE" | "AUTOMOD_WARN" | "AUTOMOD_KICK" | "AUTOMOD_BAN" | "JOIN" | "LEAVE" | "MESSAGE_DELETE" | "MESSAGE_EDIT" | "CHANNEL_CREATE" | "CHANNEL_DELETE" | "CHANNEL_UPDATE" | "ROLE_CREATE" | "ROLE_DELETE" | "ROLE_UPDATE" | "VOICE_JOIN" | "VOICE_LEAVE" | "VOICE_MOVE" | "GUILD_UPDATE" | "LOCK" | "UNLOCK" | "LOCK_ALL" | "UNLOCK_ALL";
+  action: "KICK" | "BAN" | "MUTE" | "UNBAN" | "UNMUTE" | "AUTOMOD_DELETE" | "AUTOMOD_WARN" | "AUTOMOD_KICK" | "AUTOMOD_BAN" | "JOIN" | "LEAVE" | "MESSAGE_DELETE" | "MESSAGE_EDIT" | "CHANNEL_CREATE" | "CHANNEL_DELETE" | "CHANNEL_UPDATE" | "ROLE_CREATE" | "ROLE_DELETE" | "ROLE_UPDATE" | "VOICE_JOIN" | "VOICE_LEAVE" | "VOICE_MOVE" | "GUILD_UPDATE" | "LOCK" | "UNLOCK" | "LOCK_ALL" | "UNLOCK_ALL" | "COMMAND";
   reason: string;
   timestamp: string;
 }
@@ -95,6 +95,7 @@ const ACTION_CONFIG: Record<string, any> = {
   UNLOCK: { icon: UserCheck, color: "text-emerald-600", bg: "bg-emerald-50", label: "Unlock" },
   LOCK_ALL: { icon: Trash2, color: "text-rose-700", bg: "bg-rose-100", label: "Lock All" },
   UNLOCK_ALL: { icon: UserCheck, color: "text-emerald-700", bg: "bg-emerald-100", label: "Unlock All" },
+  COMMAND: { icon: Bot, color: "text-indigo-500", bg: "bg-indigo-50", label: "Command" },
 };
 
 interface GuildSettings {
