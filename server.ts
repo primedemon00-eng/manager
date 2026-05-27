@@ -463,44 +463,9 @@ client.on("interactionCreate", async (interaction) => {
                    (commandName === "invite" && subcommandName === "leaderboard");
 
   if (!isPublic) {
-    let isAuthorized = user.id === guild.ownerId;
-
-    if (commandName === "permission") {
-      if (user.id !== guild.ownerId) {
-        return interaction.reply({
-          content: "❌ Only the server owner can configure bot permissions.",
-          ephemeral: true
-        });
-      }
-    } else if (!isAuthorized) {
-      try {
-        const settingsRef = doc(db, "guilds", guild.id);
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
-          const data = settingsSnap.data();
-          const authorizedUsers = data.authorizedUsers || [];
-          const authorizedRoles = data.authorizedRoles || [];
-
-          if (authorizedUsers.includes(user.id)) {
-            isAuthorized = true;
-          } else {
-            const member = interaction.member as GuildMember;
-            if (member && member.roles) {
-              const hasRole = member.roles.cache.some(role => authorizedRoles.includes(role.id));
-              if (hasRole) {
-                isAuthorized = true;
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to read guild settings for command authorization:", err);
-      }
-    }
-
-    if (!isAuthorized) {
+    if (user.id !== guild.ownerId) {
       return interaction.reply({
-        content: "❌ Only the server owner or authorized users/roles can use this command.",
+        content: "❌ Only the server owner can use this command. Administrators are blocked from using this bot.",
         ephemeral: true
       });
     }
