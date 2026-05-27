@@ -458,7 +458,7 @@ client.on("interactionCreate", async (interaction) => {
 
   // Only the server owner or authorized users/roles can use bot's configuration and moderation commands
   const subcommandName = options.getSubcommand(false);
-  const isPublic = ["rank", "stats", "poll"].includes(commandName) ||
+  const isPublic = ["rank", "stats"].includes(commandName) ||
                    (commandName === "level" && subcommandName === "leaderboard") ||
                    (commandName === "invite" && subcommandName === "leaderboard");
 
